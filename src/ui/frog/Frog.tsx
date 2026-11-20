@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { type Point, type SessionState, batonInBar, patternFor } from '../../core';
-import { type ArmPose, RIG, poseFor, toArt } from './rig';
+import { RIG, poseFor, toArt } from './rig';
 
 /**
- * The conductor. An original old-timey frog: shirt sleeves, ochre waistcoat, bow tie and a
- * small top hat, on a wooden podium. Every moving part is its own layer, driven each frame
- * by `poseFor()`. Swapping in hand-drawn art later means replacing the static shapes here;
- * the rig and timing stay the same.
+ * The conductor. An original old-timey frog: ochre waistcoat, bow tie and a small top hat,
+ * on a wooden podium. Every moving part is its own layer, driven each frame by `poseFor()`.
+ *
+ * He has no arms on purpose: swinging arms made the beat hard to follow, so only a small
+ * floating hand holds the baton, and the baton tip is the one thing that moves on the beat.
+ * (The rig still solves the arms, so they could come back as an option.)
  */
 
 interface Props {
@@ -18,8 +20,6 @@ interface Props {
 
 const TRAIL_LEN = 28;
 const f = (n: number) => n.toFixed(1);
-const armPath = (a: ArmPose) => `M${f(a.shoulder.x)} ${f(a.shoulder.y)} L${f(a.elbow.x)} ${f(a.elbow.y)} L${f(a.hand.x)} ${f(a.hand.y)}`;
-const angleDeg = (from: Point, to: Point) => (Math.atan2(to.y - from.y, to.x - from.x) * 180) / Math.PI;
 
 // Eye geometry (art space).
 const EYES = [
@@ -81,16 +81,8 @@ export function Frog({ beatsPerBar, showGuide, getState, onStateChange }: Props)
       });
       set('mouthOpen', 'ry', f(9 * pose.mouth));
 
-      // Free arm.
-      set('leftArmInk', 'd', armPath(pose.leftArm));
-      set('leftArm', 'd', armPath(pose.leftArm));
-      const la = angleDeg(pose.leftArm.elbow, pose.leftArm.hand);
-      set('leftHand', 'transform', `translate(${f(pose.leftArm.hand.x)} ${f(pose.leftArm.hand.y)}) rotate(${f(la + 90)})`);
-
-      // Conducting arm + baton.
+      // Baton, held by a floating hand.
       const b = pose.baton;
-      set('rightArmInk', 'd', armPath(b));
-      set('rightArm', 'd', armPath(b));
       set('baton', 'transform', `translate(${f(b.hand.x)} ${f(b.hand.y)}) rotate(${f(b.batonAngle)})`);
       set('flash', 'cx', f(b.tip.x));
       set('flash', 'cy', f(b.tip.y));
@@ -250,22 +242,6 @@ export function Frog({ beatsPerBar, showGuide, getState, onStateChange }: Props)
           })}
         </g>
       )}
-
-      {/* Free (left) arm, screen right */}
-      <path ref={ref('leftArmInk')} fill="none" stroke="var(--frog-ink)" strokeWidth="21" strokeLinecap="round" strokeLinejoin="round" />
-      <path ref={ref('leftArm')} fill="none" stroke="#f4ecd8" strokeWidth="15" strokeLinecap="round" strokeLinejoin="round" />
-      <g ref={ref('leftHand')}>
-        <g fill="#7a9a40" stroke="var(--frog-ink)" strokeWidth="2.5">
-          <circle cx="-7" cy="-9" r="4.5" />
-          <circle cx="0" cy="-11" r="4.5" />
-          <circle cx="7" cy="-9" r="4.5" />
-          <circle cx="0" cy="0" r="9.5" />
-        </g>
-      </g>
-
-      {/* Conducting (right) arm, screen left */}
-      <path ref={ref('rightArmInk')} fill="none" stroke="var(--frog-ink)" strokeWidth="21" strokeLinecap="round" strokeLinejoin="round" />
-      <path ref={ref('rightArm')} fill="none" stroke="#f4ecd8" strokeWidth="15" strokeLinecap="round" strokeLinejoin="round" />
 
       <polyline ref={ref('trail')} className="trail" points="" />
       <circle ref={ref('flash')} className="flash" r="16" opacity="0" />

@@ -342,6 +342,17 @@ export function SettingsSheet(p: Props) {
 
         <section>
           <h3>Display</h3>
+          <div className="field">
+            <span>Conductor</span>
+            <div className="view-switch" role="group" aria-label="Conductor view">
+              <button type="button" aria-pressed={s.view === 'frog'} onClick={() => update((x) => ({ ...x, view: 'frog' }))}>
+                Frog
+              </button>
+              <button type="button" aria-pressed={s.view === 'minimal'} onClick={() => update((x) => ({ ...x, view: 'minimal' }))}>
+                Minimal (baton only)
+              </button>
+            </div>
+          </div>
           <Toggle label="Show the beat pattern" hint="Faint guide of the conducting shape." checked={s.showGuide} onChange={(v) => update((x) => ({ ...x, showGuide: v }))} />
           <Toggle
             label="Keep screen awake"
