@@ -93,7 +93,7 @@ export function Frog({ beatsPerBar, showGuide, getState, onStateChange }: Props)
       if (t.length > TRAIL_LEN) t.shift();
       set('trail', 'points', t.map((p) => `${f(p.x)},${f(p.y)}`).join(' '));
 
-      const key = s ? `${s.phase}|${s.round}|${s.bar}|${s.beat}|${s.entered}|${s.finished}` : 'idle';
+      const key = s ? `${s.phase}|${s.round}|${s.bar}|${s.beat}|${s.entered}|${s.finished}|${s.stopping}` : 'idle';
       if (key !== lastKey.current) {
         lastKey.current = key;
         onChange.current?.(s);

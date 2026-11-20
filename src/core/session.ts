@@ -36,6 +36,8 @@ export interface SessionState extends ConductorState {
   round: number;
   totalRounds: number;
   finished: boolean;
+  /** Stop was pressed and the conductor is finishing (cutoff at the bar line, then lowering). */
+  stopping: boolean;
 }
 
 /** Default bar count for drill rounds when the length is set to "until stopped". */
@@ -47,6 +49,7 @@ export class Session {
   /** Segments in time order. Usually one per drill round; more after live tempo changes. */
   private segments: Round[] = [];
   private _totalRounds: number;
+  private _stopping = false;
 
   constructor(
     readonly settings: SessionSettings,
@@ -85,6 +88,11 @@ export class Session {
     return this._totalRounds;
   }
 
+  /** True once stop() or kill() has been called. */
+  get stopping(): boolean {
+    return this._stopping;
+  }
+
   get end(): number {
     return this.segments[this.segments.length - 1].end;
   }
@@ -103,6 +111,7 @@ export class Session {
   stop(t: number): void {
     const i = this.activeIndex(t);
     if (i === -1) return;
+    this._stopping = true;
     const r = this.segments[i];
     if (t < r.raiseStart) {
       // Resting between drill rounds (or before the very first): don't start the next one.
@@ -122,6 +131,7 @@ export class Session {
   kill(t: number): void {
     const i = this.activeIndex(t);
     if (i === -1) return;
+    this._stopping = true;
     this.segments[i] = { ...this.segments[i], abortedAt: t, cutoff: null, handoffAt: null, end: t };
     this.truncateAfter(i);
   }
@@ -184,6 +194,6 @@ export class Session {
       finished || t < seg.raiseStart
         ? { phase: finished ? 'done' : 'rest', baton: REST_POSITION, entered: false, sinceEntry: -Infinity }
         : conductorAt(seg, t);
-    return { ...base, round: seg.index, totalRounds, finished };
+    return { ...base, round: seg.index, totalRounds, finished, stopping: this._stopping && !finished };
   }
 }

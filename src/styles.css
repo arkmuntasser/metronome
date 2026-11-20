@@ -137,7 +137,8 @@ h1 { font-size: 1.35rem; margin: 0; letter-spacing: 0.02em; }
   background: var(--leaf); color: #fff; cursor: pointer; box-shadow: var(--shadow);
 }
 .go.stop { background: var(--accent); }
-.go:active { transform: translateY(2px); box-shadow: none; }
+.go:active:not(:disabled) { transform: translateY(2px); box-shadow: none; }
+.go.stopping { background: var(--muted); color: var(--bg); cursor: default; box-shadow: none; transform: translateY(2px); opacity: 0.85; }
 
 .chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; border: none; background: none; cursor: pointer; padding: 2px; max-width: 460px; }
 .chip { font-size: 0.85rem; padding: 4px 10px; border-radius: 999px; background: var(--panel-2); border: 1px solid var(--line); }

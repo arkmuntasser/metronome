@@ -54,6 +54,14 @@ export default function App() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [live, setLive] = useState<SessionState | null>(null);
   const running = live !== null && !live.finished;
+  // Stop pressed: he finishes the bar, cuts off and lowers the baton. Show that, and ignore more taps.
+  // `stopTapped` flips in the same render as the tap, so the button changes instantly
+  // (the engine's state only reaches React on the next animation frame).
+  const [stopTapped, setStopTapped] = useState(false);
+  const stopping = running && (live.stopping || stopTapped);
+  useEffect(() => {
+    if (!running) setStopTapped(false);
+  }, [running]);
 
   const update = useCallback((fn: (s: PracticeSettings) => PracticeSettings) => setSettings(fn), []);
   const meter = useMemo(() => meterOf(settings), [settings]);
@@ -97,8 +105,13 @@ export default function App() {
   const wake = useWakeLock(running || settings.keepAwake);
 
   const toggle = useCallback(async () => {
-    if (engine.running && !engine.state()?.finished) engine.stop();
-    else await engine.start(sessionSettingsOf(settings));
+    const state = engine.state();
+    if (engine.running && !state?.finished) {
+      if (!state?.stopping) {
+        setStopTapped(true);
+        engine.stop(); // already stopping: extra taps do nothing
+      }
+    } else await engine.start(sessionSettingsOf(settings));
   }, [settings]);
 
   const setBpm = useCallback((bpm: number) => update((s) => ({ ...s, bpm: clampBpm(bpm) })), [update]);
@@ -138,7 +151,15 @@ export default function App() {
   const deletePreset = (id: string) => setPresets((list) => list.filter((p) => p.id !== id));
 
   const active = live && !live.finished ? live : null;
-  const status = active ? (active.phase === 'conducting' && !active.entered ? 'Count-in…' : PHASE_TEXT[active.phase]) : PHASE_TEXT.rest;
+  const status = !active
+    ? PHASE_TEXT.rest
+    : active.stopping && active.phase === 'conducting'
+      ? 'Finishing the bar…'
+      : active.stopping && active.phase === 'lower'
+        ? 'Stopped'
+        : active.phase === 'conducting' && !active.entered
+          ? 'Count-in…'
+          : PHASE_TEXT[active.phase];
   const counter =
     active?.phase === 'conducting' && active.bar !== undefined && active.beat !== undefined
       ? active.bar < 0
@@ -189,8 +210,13 @@ export default function App() {
 
       <section className="dock" aria-label="Controls">
         <TempoControl bpm={settings.bpm} unit={tempoUnitLabel(meter)} onChange={setBpm} />
-        <button className={`go ${running ? 'stop' : ''}`} onClick={() => void toggle()}>
-          {running ? 'Stop' : 'Start'}
+        <button
+          className={`go ${running ? 'stop' : ''} ${stopping ? 'stopping' : ''}`}
+          onClick={() => void toggle()}
+          disabled={stopping}
+          aria-live="polite"
+        >
+          {stopping ? 'Stopping…' : running ? 'Stop' : 'Start'}
         </button>
         <button type="button" className="chips" onClick={() => setSheetOpen(true)} aria-label={`Cue-in settings: ${summary(settings).join(', ')}. Change.`}>
           {summary(settings).map((c) => (

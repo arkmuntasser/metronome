@@ -91,6 +91,37 @@ export function conductingArm(tipPattern: Point): ConductingArmPose {
   return { ...arm, tip: realTip, batonAngle: (Math.atan2(dir.y, dir.x) * 180) / Math.PI };
 }
 
+export interface BatonPose {
+  /** Where the hand holds the baton. Always below the tip. */
+  hand: Point;
+  tip: Point;
+  /** Baton angle in degrees (SVG rotation; -90 = straight up). */
+  batonAngle: number;
+}
+
+/** Most the baton leans away from vertical, either way. */
+export const MAX_BATON_TILT = 35;
+/** Degrees of lean per art unit of horizontal distance from the pattern centre. */
+const TILT_PER_UNIT = 0.3;
+/** Below the ictus plane (lowering to rest) the path is squashed, so the hand stays above the podium. */
+const BELOW_PLANE_SCALE = 0.12;
+
+/**
+ * The armless frog's baton: a floating hand holds it, and the baton ALWAYS points up from the
+ * hand, leaning left or right by at most MAX_BATON_TILT depending on where the tip is.
+ * The angle depends only on the tip's horizontal position, so it changes smoothly and can
+ * never flip or spin round, whatever path the tip takes.
+ */
+export function floatingBaton(tipPattern: Point): BatonPose {
+  const p = tipPattern.y < 0 ? { x: tipPattern.x, y: tipPattern.y * BELOW_PLANE_SCALE } : tipPattern;
+  const tip = toArt(p);
+  const lean = clamp((tip.x - RIG.patternOrigin.x) * TILT_PER_UNIT, -MAX_BATON_TILT, MAX_BATON_TILT);
+  const batonAngle = -90 + lean;
+  const rad = (batonAngle * Math.PI) / 180;
+  const hand = { x: tip.x - Math.cos(rad) * RIG.baton, y: tip.y - Math.sin(rad) * RIG.baton };
+  return { hand, tip, batonAngle };
+}
+
 /** Deterministic pseudo-random in [0,1) from an integer (so blinks don't need state). */
 function hash(n: number): number {
   const x = Math.sin(n * 127.1 + 311.7) * 43758.5453;
@@ -108,7 +139,7 @@ export function blinkAmount(t: number): number {
 }
 
 export interface FrogPose {
-  baton: ConductingArmPose;
+  baton: BatonPose;
   leftArm: ArmPose;
   /** Head offset (nod) and tilt in degrees. */
   head: { dx: number; dy: number; rotate: number };
@@ -135,7 +166,7 @@ export interface FrogPose {
  */
 export function poseFor(s: SessionState | null, wall: number): FrogPose {
   const phase = s && !s.finished ? s.phase : 'rest';
-  const baton = conductingArm(s?.baton ?? REST_POSITION);
+  const baton = floatingBaton(s?.baton ?? REST_POSITION);
   const p = s?.phaseProgress ?? 0;
 
   // ── free (left) hand: rests on the waistcoat; rises with an open palm to invite the entry,
