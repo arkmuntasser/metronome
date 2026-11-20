@@ -1,6 +1,6 @@
 /**
  * A practice session: one round, or a drill of several rounds, each with its own
- * random hold, separated by a rest.
+ * random hold, separated by a rest. Live tempo changes split rounds into segments.
  */
 
 import { type Meter, type MeterSettings, deriveMeter } from './meter';
@@ -13,6 +13,7 @@ import {
   conductorAt,
   holdDurationFor,
   requestStop,
+  retimeRound,
   roundEvents,
 } from './timeline';
 import { REST_POSITION } from './patterns';
@@ -31,7 +32,7 @@ export interface SessionSettings {
 }
 
 export interface SessionState extends ConductorState {
-  /** 0-based index of the current (or upcoming) round. */
+  /** 0-based index of the current (or upcoming) drill round. */
   round: number;
   totalRounds: number;
   finished: boolean;
@@ -41,61 +42,132 @@ export interface SessionState extends ConductorState {
 export const DRILL_DEFAULT_BARS = 4;
 
 export class Session {
-  readonly meter: Meter;
-  private rounds: Round[] = [];
+  private _meter: Meter;
+  private readonly cue: CueSettings;
+  /** Segments in time order. Usually one per drill round; more after live tempo changes. */
+  private segments: Round[] = [];
+  private _totalRounds: number;
 
   constructor(
     readonly settings: SessionSettings,
     readonly startTime: number,
     random: () => number = Math.random,
   ) {
-    this.meter = deriveMeter(settings.meter);
+    this._meter = deriveMeter(settings.meter);
     const drill = settings.drill.enabled;
-    const cue: CueSettings =
+    this.cue =
       drill && settings.cue.length.kind === 'untilStopped'
         ? { ...settings.cue, length: { kind: 'bars', bars: DRILL_DEFAULT_BARS } }
         : settings.cue;
-    const count = drill ? Math.max(1, Math.floor(settings.drill.rounds)) : 1;
+    this._totalRounds = drill ? Math.max(1, Math.floor(settings.drill.rounds)) : 1;
 
     let t = startTime;
-    for (let i = 0; i < count; i++) {
-      const round = buildRound(this.meter, cue, t, holdDurationFor(cue, random));
-      this.rounds.push(round);
-      t = round.end + Math.max(0, settings.drill.restSeconds);
+    for (let i = 0; i < this._totalRounds; i++) {
+      const round = { ...buildRound(this._meter, this.cue, t, holdDurationFor(this.cue, random)), index: i };
+      this.segments.push(round);
+      t = round.end + this.rest;
     }
   }
 
+  private get rest(): number {
+    return Math.max(0, this.settings.drill.restSeconds);
+  }
+
+  get meter(): Meter {
+    return this._meter;
+  }
+
   get allRounds(): readonly Round[] {
-    return this.rounds;
+    return this.segments;
+  }
+
+  get totalRounds(): number {
+    return this._totalRounds;
   }
 
   get end(): number {
-    return this.rounds[this.rounds.length - 1].end;
+    return this.segments[this.segments.length - 1].end;
+  }
+
+  private activeIndex(t: number): number {
+    return this.segments.findIndex((r) => t < r.end);
+  }
+
+  /** Drop every segment after `i` and record how many drill rounds remain. */
+  private truncateAfter(i: number): void {
+    this.segments = this.segments.slice(0, i + 1);
+    this._totalRounds = this.segments[i].index + 1;
   }
 
   /** Stop at time t: the active round cuts off (or is abandoned) and later rounds are dropped. */
   stop(t: number): void {
-    const i = this.rounds.findIndex((r) => t < r.end);
+    const i = this.activeIndex(t);
     if (i === -1) return;
-    if (t < this.rounds[i].raiseStart) {
-      // Resting between drill rounds: just don't start the next one.
-      this.rounds = this.rounds.slice(0, Math.max(1, i));
-      if (i === 0) this.rounds[0] = { ...this.rounds[0], abortedAt: t, cutoff: null, end: t };
+    const r = this.segments[i];
+    if (t < r.raiseStart) {
+      // Resting between drill rounds (or before the very first): don't start the next one.
+      if (i === 0) {
+        this.segments[0] = { ...r, abortedAt: t, cutoff: null, end: t };
+        this.truncateAfter(0);
+      } else {
+        this.truncateAfter(i - 1);
+      }
       return;
     }
-    this.rounds = [...this.rounds.slice(0, i), requestStop(this.rounds[i], t)];
+    this.segments[i] = requestStop(r, t);
+    this.truncateAfter(i);
   }
 
   /** Stop immediately: no cutoff, everything silenced now. */
   kill(t: number): void {
-    const i = this.rounds.findIndex((r) => t < r.end);
+    const i = this.activeIndex(t);
     if (i === -1) return;
-    this.rounds = [...this.rounds.slice(0, i), { ...this.rounds[i], abortedAt: t, cutoff: null, end: t }];
+    this.segments[i] = { ...this.segments[i], abortedAt: t, cutoff: null, handoffAt: null, end: t };
+    this.truncateAfter(i);
+  }
+
+  /**
+   * Change tempo / accents / subdivision while running. Takes effect from the next beat
+   * (or immediately, if the conductor hasn't started the prep beat yet).
+   * The number of conducted beats per bar must not change.
+   */
+  changeMeter(t: number, settings: MeterSettings): void {
+    const meter = deriveMeter(settings);
+    if (meter.beats.length !== this._meter.beats.length) throw new Error('Cannot change beats per bar while running');
+    this._meter = meter;
+    const i = this.activeIndex(t);
+    if (i === -1) return;
+    const r = this.segments[i];
+
+    let current: Round[];
+    if (r.abortedAt !== null || (r.cutoff !== null && t >= r.cutoff)) {
+      current = [r]; // already stopping: leave it alone
+    } else if (t < r.prepStart && !r.continued) {
+      // Still raising / holding: rebuild the cue-in at the new tempo, same start and same hold.
+      current = [{ ...buildRound(meter, r.cue, r.raiseStart, r.hold), index: r.index }];
+    } else {
+      // If this segment was already cut for an earlier change that hasn't happened yet, re-cut it.
+      const uncut = r.handoffAt !== null ? { ...r, handoffAt: null } : r;
+      current = retimeRound(uncut, t, meter) ?? [r];
+    }
+
+    // Rebuild the drill rounds that haven't started yet, keeping their holds.
+    const later: Round[] = [];
+    let prev = current[current.length - 1];
+    let lastIndex = prev.index;
+    for (const seg of this.segments.slice(i + 1)) {
+      if (seg.index === lastIndex) continue; // stale continuation of the current round
+      const next = { ...buildRound(meter, this.cue, prev.end + this.rest, seg.hold), index: seg.index };
+      later.push(next);
+      prev = next;
+      lastIndex = seg.index;
+    }
+    this.segments = [...this.segments.slice(0, i), ...current, ...later];
   }
 
   eventsBetween(from: number, to: number): AudioEvent[] {
     const out: AudioEvent[] = [];
-    for (const r of this.rounds) {
+    for (const r of this.segments) {
       if (r.end <= from || r.raiseStart >= to) continue;
       out.push(...roundEvents(r, from, to));
     }
@@ -103,13 +175,15 @@ export class Session {
   }
 
   stateAt(t: number): SessionState {
-    const totalRounds = this.rounds.length;
-    let i = this.rounds.findIndex((r) => t < r.end);
+    const totalRounds = this._totalRounds;
+    let i = this.activeIndex(t);
     const finished = i === -1;
-    if (finished) i = totalRounds - 1;
-    const round = this.rounds[i];
+    if (finished) i = this.segments.length - 1;
+    const seg = this.segments[i];
     const base: ConductorState =
-      finished || t < round.raiseStart ? { phase: finished ? 'done' : 'rest', baton: REST_POSITION, entered: false } : conductorAt(round, t);
-    return { ...base, round: i, totalRounds, finished };
+      finished || t < seg.raiseStart
+        ? { phase: finished ? 'done' : 'rest', baton: REST_POSITION, entered: false, sinceEntry: -Infinity }
+        : conductorAt(seg, t);
+    return { ...base, round: seg.index, totalRounds, finished };
   }
 }

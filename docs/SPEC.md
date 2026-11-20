@@ -33,7 +33,7 @@ implementations in step.
 
 | Setting | Notes |
 |---|---|
-| Tempo | BPM, tap-tempo; sensible range ~30–250 |
+| Tempo | BPM 20–300, tap tempo, ± buttons (hold to repeat), arrow keys. Changes live from the next beat |
 | Time signature | Simple (2/4, 3/4, 4/4, 5/4…) and compound (6/8, 9/8, 12/8) |
 | Compound feel | e.g. 6/8 conducted "in 2" or "in 6", 9/8 in 3 or 9 |
 | Grouping / accents | Per-beat accent level (strong / medium / none), groupings like 2+2+3 in 7/8 |

@@ -116,4 +116,4 @@ export function readyPosition(pattern: Pattern, beat: number): Point {
 }
 
 /** Resting pose: baton lowered by the conductor's right side (screen left, player's view). */
-export const REST_POSITION: Point = { x: -0.55, y: -0.45 };
+export const REST_POSITION: Point = { x: -0.5, y: -0.85 };
