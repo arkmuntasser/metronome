@@ -9,8 +9,8 @@
  * iOS equivalent: AVAudioEngine + AVAudioPlayerNode.scheduleBuffer(at: AVAudioTime).
  */
 
-import { Session, type SessionSettings, type SessionState } from '../core';
-import { type ClickSound, playBreath, playClick } from './sounds';
+import { type ClickSound, type MeterSettings, Session, type SessionSettings, type SessionState } from '../core';
+import { playBreath, playClick } from './sounds';
 
 const TICK_MS = 25;
 const LOOKAHEAD_S = 0.15;
@@ -82,6 +82,26 @@ export class AudioEngine {
     if (!this.session || !this.ctx) return;
     this.session.stop(this.ctx.currentTime);
     this.rescheduleFromNow();
+  }
+
+  /** Change tempo / accents / subdivision while playing: applies from the next beat. */
+  updateMeter(meter: MeterSettings): void {
+    if (!this.session || !this.ctx) return;
+    try {
+      this.session.changeMeter(this.ctx.currentTime, meter);
+    } catch {
+      return; // e.g. beats-per-bar changed: ignored until the next start
+    }
+    this.rescheduleFromNow();
+  }
+
+  /** A short sound to preview the click choice. */
+  async preview(sound: ClickSound): Promise<void> {
+    const ctx = await this.unlock();
+    if (!this.master || this.session) return;
+    const t = ctx.currentTime + 0.05;
+    playClick(ctx, this.master, sound, 'strong', t);
+    playClick(ctx, this.master, sound, 'weak', t + 0.3);
   }
 
   /** Immediate stop: silence now, baton drops. */

@@ -4,16 +4,7 @@
  * nodes so they can be cancelled if the user stops.
  */
 
-import type { Accent } from '../core';
-
-export type ClickSound = 'woodblock' | 'beep' | 'cowbell' | 'croak';
-
-export const CLICK_SOUNDS: { id: ClickSound; label: string }[] = [
-  { id: 'woodblock', label: 'Woodblock' },
-  { id: 'beep', label: 'Beep' },
-  { id: 'cowbell', label: 'Cowbell' },
-  { id: 'croak', label: 'Frog croak' },
-];
+import type { Accent, ClickSound } from '../core';
 
 export type Level = Accent | 'sub';
 
@@ -41,7 +32,7 @@ function osc(ctx: BaseAudioContext, type: OscillatorType, freq: number, dest: Au
   return o;
 }
 
-let noiseCache: WeakMap<BaseAudioContext, AudioBuffer> = new WeakMap();
+const noiseCache: WeakMap<BaseAudioContext, AudioBuffer> = new WeakMap();
 function noiseBuffer(ctx: BaseAudioContext): AudioBuffer {
   let b = noiseCache.get(ctx);
   if (!b) {

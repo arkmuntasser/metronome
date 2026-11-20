@@ -63,6 +63,16 @@ export interface Round {
   abortedAt: number | null;
   /** When the baton is back at rest (Infinity while running). */
   end: number;
+  /** The hold this round was built with, seconds. */
+  hold: number;
+  /** Drill round number this segment belongs to (set by Session). */
+  index: number;
+  /**
+   * Live changes (e.g. tempo) split a round into segments: the old segment is cut off at a beat
+   * (`handoffAt`) and a `continued` segment carries on from that beat with the new meter.
+   */
+  handoffAt: number | null;
+  continued: boolean;
 }
 
 export type Phase = 'rest' | 'raise' | 'hold' | 'prep' | 'conducting' | 'cutoff' | 'lower' | 'done';
@@ -114,9 +124,7 @@ export function holdDurationFor(cue: CueSettings, random: () => number): number 
 }
 
 export function buildRound(meter: Meter, cue: CueSettings, startTime: number, hold: number): Round {
-  const { numerator } = meter.settings;
-  const entryPulse = ((Math.floor(cue.entry.pulse) % numerator) + numerator) % numerator;
-  const entryOffset = Math.min(Math.max(cue.entry.offset, 0), 0.999);
+  const { pulse: entryPulse, offset: entryOffset } = entryOf(meter, cue);
   const pattern = patternFor(meter.beats.length);
 
   // Count-in: the conductor cues the downbeat of the bar *before* the entry bar and counts it aloud.
@@ -157,7 +165,86 @@ export function buildRound(meter: Meter, cue: CueSettings, startTime: number, ho
     cutoff,
     abortedAt: null,
     end: cutoff === null ? Infinity : cutoff + CUTOFF_DURATION + LOWER_DURATION,
+    hold,
+    index: 0,
+    handoffAt: null,
+    continued: false,
   };
+}
+
+function entryOf(meter: Meter, cue: CueSettings): { pulse: number; offset: number } {
+  const n = meter.settings.numerator;
+  return {
+    pulse: ((Math.floor(cue.entry.pulse) % n) + n) % n,
+    offset: Math.min(Math.max(cue.entry.offset, 0), 0.999),
+  };
+}
+
+/**
+ * The first beat boundary strictly after `t`, as (time, bar, beat), once the prep beat has begun.
+ * Returns null during the raise/hold (no beat grid is running yet).
+ */
+export function nextBeatAfter(round: Round, t: number): { time: number; bar: number; beat: number } | null {
+  if (t < round.prepStart) return null;
+  const { meter } = round;
+  if (t < round.cueIctus - EPS) {
+    const bar = Math.floor((round.cueIctus - round.barZero) / meter.barDuration + EPS);
+    return { time: round.cueIctus, bar, beat: round.cueBeat };
+  }
+  let bar = Math.floor((t - round.barZero) / meter.barDuration + EPS);
+  for (let guard = 0; guard < 64; guard++) {
+    const barStart = round.barZero + bar * meter.barDuration;
+    for (const b of meter.beats) {
+      const time = barStart + b.offset;
+      if (time > t + EPS) return { time, bar, beat: b.index };
+    }
+    bar++;
+  }
+  return null;
+}
+
+/**
+ * Change the meter (tempo, accents, subdivision) of a round that is already running, from the
+ * next beat on. Returns [old segment cut at that beat, continuation], or null if nothing can
+ * change (stopping, finished, or the round ends before the next beat).
+ * The number of conducted beats per bar must stay the same (the pattern can't change mid-bar).
+ */
+export function retimeRound(round: Round, t: number, meter: Meter): [Round, Round] | null {
+  if (round.abortedAt !== null || round.handoffAt !== null) return null;
+  if (meter.beats.length !== round.meter.beats.length) throw new Error('Cannot change beats per bar while running');
+  const nb = nextBeatAfter(round, t);
+  if (!nb) return null;
+  if (round.cutoff !== null && nb.time >= round.cutoff - EPS) return null;
+
+  // Align the new grid so that beat `nb.beat` of bar `nb.bar` falls exactly on nb.time:
+  // bar numbers, the entry point and the cutoff bar all stay where they were.
+  const barZero = nb.time - meter.beats[nb.beat].offset - nb.bar * meter.barDuration;
+  const entry = entryOf(meter, round.cue);
+  const entryTime = barZero + (entry.pulse + entry.offset) * meter.pulseDuration;
+  const firstClick = round.cue.startMode === 'countIn' ? barZero - meter.barDuration : entryTime;
+  let cutoff: number | null = null;
+  if (round.cutoff !== null) {
+    const cutoffBar = Math.round((round.cutoff - round.barZero) / round.meter.barDuration);
+    cutoff = barZero + cutoffBar * meter.barDuration;
+  }
+  const continuation: Round = {
+    ...round,
+    meter,
+    raiseStart: nb.time,
+    holdStart: nb.time,
+    prepStart: nb.time,
+    prepDuration: previousBeat(meter, nb.beat).duration,
+    cueBeat: nb.beat,
+    cueIctus: nb.time,
+    entryTime,
+    clickStart: Math.max(nb.time, firstClick),
+    barZero,
+    cutoff,
+    end: cutoff === null ? Infinity : cutoff + CUTOFF_DURATION + LOWER_DURATION,
+    handoffAt: null,
+    continued: true,
+  };
+  return [{ ...round, handoffAt: nb.time, end: nb.time }, continuation];
 }
 
 /**
@@ -183,12 +270,19 @@ export function roundEvents(round: Round, from: number, to: number): AudioEvent[
   const events: AudioEvent[] = [];
   const { meter, cue } = round;
 
-  if (cue.breath && round.prepStart >= from && round.prepStart < to && (round.abortedAt ?? Infinity) > round.prepStart) {
+  const segmentEnd = round.handoffAt ?? Infinity;
+  if (
+    cue.breath &&
+    !round.continued &&
+    round.prepStart >= from &&
+    round.prepStart < to &&
+    Math.min(round.abortedAt ?? Infinity, segmentEnd) > round.prepStart
+  ) {
     events.push({ kind: 'breath', time: round.prepStart, duration: round.prepDuration });
   }
   if (!cue.clicks) return events;
 
-  const clickEnd = round.abortedAt ?? round.cutoff ?? Infinity; // exclusive
+  const clickEnd = Math.min(round.abortedAt ?? round.cutoff ?? Infinity, segmentEnd); // exclusive
   const lo = Math.max(from, round.clickStart);
   const hi = Math.min(to, clickEnd);
   const { numerator, subdivision, accents } = meter.settings;
@@ -210,7 +304,7 @@ export function roundEvents(round: Round, from: number, to: number): AudioEvent[
     }
   }
 
-  if (round.cutoff !== null && round.abortedAt === null && round.cutoff >= from && round.cutoff < to) {
+  if (round.cutoff !== null && round.abortedAt === null && round.handoffAt === null && round.cutoff >= from && round.cutoff < to) {
     const bar = Math.round((round.cutoff - round.barZero) / meter.barDuration);
     events.push({ kind: 'click', time: round.cutoff, accent: 'strong', bar, pulse: 0, final: true });
   }
