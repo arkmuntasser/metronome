@@ -17,6 +17,9 @@ export const CLICK_SOUNDS: { id: ClickSound; label: string }[] = [
   { id: 'croak', label: 'Frog croak' },
 ];
 
+export type ConductorView = 'frog' | 'minimal';
+export const CONDUCTOR_VIEWS: ConductorView[] = ['frog', 'minimal'];
+
 export interface PracticeSettings {
   version: 1;
   timeSignature: string;
@@ -30,6 +33,8 @@ export interface PracticeSettings {
   showGuide: boolean;
   /** Keep the screen awake while the app is open, not just while playing. */
   keepAwake: boolean;
+  /** The animated frog, or just the baton tip on the beat pattern. */
+  view: ConductorView;
 }
 
 export interface Preset {
@@ -61,6 +66,7 @@ export const DEFAULT_SETTINGS: PracticeSettings = {
   volume: 0.8,
   showGuide: true,
   keepAwake: false,
+  view: 'frog',
 };
 
 export function timeSignatureOf(s: PracticeSettings): TimeSignaturePreset {
@@ -153,6 +159,7 @@ export function sanitizeSettings(raw: unknown): PracticeSettings {
     volume: num(r.volume, d.volume, 0, 1),
     showGuide: bool(r.showGuide, d.showGuide),
     keepAwake: bool(r.keepAwake, d.keepAwake),
+    view: oneOf(r.view, CONDUCTOR_VIEWS, d.view),
   };
 }
 
@@ -197,6 +204,14 @@ export const STARTER_PRESETS: Preset[] = [
     cue: { ...s.cue, startMode: 'countIn', breath: false },
   })),
 ];
+
+/**
+ * Apply a preset. Device / display preferences (which view, keeping the screen awake)
+ * stay as they are: a preset is about what you practise, not how the screen looks.
+ */
+export function applyPreset(current: PracticeSettings, preset: PracticeSettings): PracticeSettings {
+  return { ...structuredClone(preset), view: current.view, keepAwake: current.keepAwake };
+}
 
 /** A short human summary, e.g. "3/4 · ♩ = 132 · random 1–5 s · in on 3". */
 export function describeSettings(s: PracticeSettings): string {

@@ -1,15 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  type ConductorView,
   type PracticeSettings,
   type Preset,
   type SessionState,
   MAX_BPM,
   MIN_BPM,
+  applyPreset,
   meterOf,
   sessionSettingsOf,
   timeSignatureOf,
 } from './core';
 import { AudioEngine } from './audio/engine';
+import { BatonView } from './ui/BatonView';
 import { Frog } from './ui/frog/Frog';
 import { SettingsSheet } from './ui/SettingsSheet';
 import { TempoControl } from './ui/TempoControl';
@@ -130,7 +133,7 @@ export default function App() {
     });
   const loadPreset = (id: string) => {
     const p = presets.find((x) => x.id === id);
-    if (p) setSettings(structuredClone(p.settings));
+    if (p) setSettings((current) => applyPreset(current, p.settings));
   };
   const deletePreset = (id: string) => setPresets((list) => list.filter((p) => p.id !== id));
 
@@ -148,17 +151,35 @@ export default function App() {
     <div className="app">
       <header className="topbar">
         <h1>Maestro Frog</h1>
-        <button type="button" className="icon-btn" onClick={() => setSheetOpen(true)} aria-label="Settings and presets">
+        <div className="topbar-actions">
+          <div className="view-switch" role="group" aria-label="Conductor view">
+            {(
+              [
+                ['frog', 'Frog'],
+                ['minimal', 'Minimal'],
+              ] as [ConductorView, string][]
+            ).map(([v, label]) => (
+              <button key={v} type="button" aria-pressed={settings.view === v} onClick={() => update((s) => ({ ...s, view: v }))}>
+                {label}
+              </button>
+            ))}
+          </div>
+          <button type="button" className="icon-btn" onClick={() => setSheetOpen(true)} aria-label="Settings and presets">
           <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
             <path d="M4 7h10M18 7h2M4 17h4M12 17h8M14 4v6M8 14v6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" fill="none" />
           </svg>
           <span>Settings</span>
-        </button>
+          </button>
+        </div>
       </header>
 
       <main className="stage-area">
         <div className="stage" onClick={() => void toggle()} aria-hidden="true">
-          <Frog beatsPerBar={meter.grouping.length} showGuide={settings.showGuide} getState={getState} onStateChange={setLive} />
+          {settings.view === 'frog' ? (
+            <Frog beatsPerBar={meter.grouping.length} showGuide={settings.showGuide} getState={getState} onStateChange={setLive} />
+          ) : (
+            <BatonView beatsPerBar={meter.grouping.length} showGuide={settings.showGuide} getState={getState} onStateChange={setLive} />
+          )}
         </div>
         <div className="status" aria-live="polite">
           <div className={`phase phase-${active ? active.phase : 'rest'}`}>{status}</div>

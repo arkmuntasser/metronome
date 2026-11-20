@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_SETTINGS,
+  applyPreset,
   STARTER_PRESETS,
   describeSettings,
   meterOf,
@@ -58,5 +59,17 @@ describe('settings', () => {
     expect(list).toHaveLength(1);
     expect(list[0]).toMatchObject({ id: 'a', name: 'Mozart' });
     expect(list[0].settings.bpm).toBe(72);
+  });
+
+  it('view defaults to the frog, accepts minimal, rejects junk', () => {
+    expect(sanitizeSettings({}).view).toBe('frog');
+    expect(sanitizeSettings({ view: 'minimal' }).view).toBe('minimal');
+    expect(sanitizeSettings({ view: 'banana' }).view).toBe('frog');
+  });
+
+  it('loading a preset keeps the current view and keep-awake choice', () => {
+    const current = { ...DEFAULT_SETTINGS, view: 'minimal' as const, keepAwake: true };
+    const loaded = applyPreset(current, STARTER_PRESETS[1].settings);
+    expect(loaded).toMatchObject({ view: 'minimal', keepAwake: true, bpm: STARTER_PRESETS[1].settings.bpm });
   });
 });
