@@ -64,7 +64,7 @@ export function BatonView({ beatsPerBar, showGuide, getState, onStateChange }: P
         flashRef.current?.setAttribute('cy', String(pos.y));
       }
 
-      const key = s ? `${s.phase}|${s.round}|${s.bar}|${s.beat}|${s.entered}|${s.finished}` : 'idle';
+      const key = s ? `${s.phase}|${s.round}|${s.bar}|${s.beat}|${s.entered}|${s.finished}|${s.stopping}` : 'idle';
       if (key !== lastKey.current) {
         lastKey.current = key;
         onChange.current?.(s);

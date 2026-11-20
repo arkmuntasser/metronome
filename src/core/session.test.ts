@@ -132,3 +132,21 @@ describe('tap tempo', () => {
     expect(r.bpm).toBe(60);
   });
 });
+
+describe('stopping state', () => {
+  it('is false while playing, true from the stop until the baton is down, then finished', () => {
+    const s = session();
+    const entry = s.allRounds[0].entryTime;
+    expect(s.stateAt(entry + 1).stopping).toBe(false);
+    s.stop(entry + 1.2);
+    expect(s.stateAt(entry + 1.3)).toMatchObject({ stopping: true, phase: 'conducting' }); // still finishing the bar
+    expect(s.stateAt(s.end - 0.1)).toMatchObject({ stopping: true, phase: 'lower' });
+    expect(s.stateAt(s.end + 0.1)).toMatchObject({ stopping: false, finished: true });
+  });
+
+  it('a natural end (N bars) is not "stopping"', () => {
+    const s = session({ length: { kind: 'bars', bars: 1 } });
+    const r = s.allRounds[0];
+    expect(s.stateAt(r.cutoff! + 0.2)).toMatchObject({ phase: 'cutoff', stopping: false });
+  });
+});
