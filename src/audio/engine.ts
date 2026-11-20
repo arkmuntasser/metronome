@@ -10,6 +10,7 @@
  */
 
 import { type ClickSound, type MeterSettings, Session, type SessionSettings, type SessionState } from '../core';
+import { primeContext, requestPlaybackSession } from './ios';
 import { playBreath, playClick } from './sounds';
 
 const TICK_MS = 25;
@@ -41,16 +42,27 @@ export class AudioEngine {
     if (this.master) this.master.gain.value = v;
   }
 
-  /** Must be called from a user gesture (tap/click) the first time, or browsers keep audio muted. */
+  /**
+   * Must be called from a user gesture (tap/click), or browsers keep audio muted.
+   * Everything up to the first `await` runs synchronously inside the gesture, which iOS requires.
+   */
   async unlock(): Promise<AudioContext> {
+    // iOS: use the "playback" audio session so the silent switch doesn't mute the clicks.
+    requestPlaybackSession();
     if (!this.ctx) {
       this.ctx = new AudioContext({ latencyHint: 'interactive' });
       this.master = this.ctx.createGain();
       this.master.gain.value = this._volume;
       this.master.connect(this.ctx.destination);
     }
-    if (this.ctx.state !== 'running') await this.ctx.resume();
-    return this.ctx;
+    const ctx = this.ctx;
+    // iOS can also leave the context 'interrupted' after a call or after the app was in the background.
+    if (ctx.state !== 'running') {
+      primeContext(ctx);
+      const resumed = ctx.resume().catch(() => undefined);
+      await Promise.race([resumed, new Promise((r) => window.setTimeout(r, 1000))]);
+    }
+    return ctx;
   }
 
   get running(): boolean {
