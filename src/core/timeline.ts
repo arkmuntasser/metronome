@@ -76,6 +76,13 @@ export interface ConductorState {
   beatProgress?: number;
   /** True once the entry time has passed. */
   entered: boolean;
+  /**
+   * 0..1 progress through timed gestures (raise, prep, cutoff, lower).
+   * Deliberately absent during the hold, so nothing can hint at when it ends.
+   */
+  phaseProgress?: number;
+  /** Seconds since the entry (negative before it). Lets the renderer react to the first downbeat. */
+  sinceEntry: number;
 }
 
 export type AudioEvent =
@@ -217,20 +224,23 @@ const lerpPt = (a: Point, b: Point, t: number): Point => ({ x: a.x + (b.x - a.x)
 /** Where the baton is, and what the conductor is doing, at time `t`. */
 export function conductorAt(round: Round, t: number): ConductorState {
   const entered = t >= round.entryTime && round.abortedAt === null;
+  const sinceEntry = t - round.entryTime;
 
   if (round.abortedAt !== null && t >= round.abortedAt) {
-    if (t >= round.end) return { phase: 'done', baton: REST_POSITION, entered: false };
+    if (t >= round.end) return { phase: 'done', baton: REST_POSITION, entered: false, sinceEntry };
     const from = conductorAt({ ...round, abortedAt: null }, round.abortedAt).baton;
-    return { phase: 'lower', baton: lerpPt(from, REST_POSITION, smooth((t - round.abortedAt) / LOWER_DURATION)), entered: false };
+    const p = clamp01((t - round.abortedAt) / LOWER_DURATION);
+    return { phase: 'lower', baton: lerpPt(from, REST_POSITION, smooth(p)), entered: false, phaseProgress: p, sinceEntry };
   }
 
-  if (t < round.raiseStart) return { phase: 'rest', baton: REST_POSITION, entered };
+  if (t < round.raiseStart) return { phase: 'rest', baton: REST_POSITION, entered, sinceEntry };
 
   if (t < round.holdStart) {
-    const p = smooth((t - round.raiseStart) / RAISE_DURATION);
+    const raw = (t - round.raiseStart) / RAISE_DURATION;
+    const p = smooth(raw);
     // Lift up and over rather than straight across, like bringing the arm up.
     const base = lerpPt(REST_POSITION, round.ready, p);
-    return { phase: 'raise', baton: { x: base.x, y: base.y + 0.15 * Math.sin(Math.PI * p) }, entered };
+    return { phase: 'raise', baton: { x: base.x, y: base.y + 0.15 * Math.sin(Math.PI * p) }, entered, phaseProgress: raw, sinceEntry };
   }
 
   if (t < round.prepStart) {
@@ -238,13 +248,13 @@ export function conductorAt(round: Round, t: number): ConductorState {
     const dt = t - round.holdStart;
     const settle = Math.exp(-dt * 3) * 0.04 * Math.sin(dt * 9);
     const sway = 0.008 * Math.sin(dt * 1.7);
-    return { phase: 'hold', baton: { x: round.ready.x + sway, y: round.ready.y + settle }, entered };
+    return { phase: 'hold', baton: { x: round.ready.x + sway, y: round.ready.y + settle }, entered, sinceEntry };
   }
 
   if (t < round.cueIctus) {
     const p = (t - round.prepStart) / round.prepDuration;
     const target = round.pattern.ictus[round.cueBeat];
-    return { phase: 'prep', baton: arc(round.ready, target, round.ready.y + PREP_LIFT, p), entered };
+    return { phase: 'prep', baton: arc(round.ready, target, round.ready.y + PREP_LIFT, p), entered, phaseProgress: p, sinceEntry };
   }
 
   if (round.cutoff === null || t < round.cutoff) {
@@ -262,6 +272,7 @@ export function conductorAt(round: Round, t: number): ConductorState {
       beat: beat.index,
       beatProgress,
       entered,
+      sinceEntry,
     };
   }
 
@@ -269,7 +280,8 @@ export function conductorAt(round: Round, t: number): ConductorState {
   const cutoffEnd = round.cutoff + CUTOFF_DURATION;
   if (t < cutoffEnd) {
     // Release: a small closing loop that ends just above the ictus.
-    const p = smooth((t - round.cutoff) / CUTOFF_DURATION);
+    const raw = (t - round.cutoff) / CUTOFF_DURATION;
+    const p = smooth(raw);
     const r = 0.18;
     const ang = p * 1.6 * Math.PI;
     const dir = down.x <= 0 ? 1 : -1;
@@ -277,11 +289,14 @@ export function conductorAt(round: Round, t: number): ConductorState {
       phase: 'cutoff',
       baton: { x: down.x + dir * r * Math.sin(ang), y: down.y + r * (1 - Math.cos(ang)) * 0.8 + 0.1 * p },
       entered,
+      phaseProgress: raw,
+      sinceEntry,
     };
   }
   if (t < round.end) {
     const from = conductorAt(round, cutoffEnd - EPS).baton;
-    return { phase: 'lower', baton: lerpPt(from, REST_POSITION, smooth((t - cutoffEnd) / LOWER_DURATION)), entered };
+    const p = (t - cutoffEnd) / LOWER_DURATION;
+    return { phase: 'lower', baton: lerpPt(from, REST_POSITION, smooth(p)), entered, phaseProgress: p, sinceEntry };
   }
-  return { phase: 'done', baton: REST_POSITION, entered };
+  return { phase: 'done', baton: REST_POSITION, entered, sinceEntry };
 }

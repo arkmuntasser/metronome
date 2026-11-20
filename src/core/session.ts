@@ -109,7 +109,9 @@ export class Session {
     if (finished) i = totalRounds - 1;
     const round = this.rounds[i];
     const base: ConductorState =
-      finished || t < round.raiseStart ? { phase: finished ? 'done' : 'rest', baton: REST_POSITION, entered: false } : conductorAt(round, t);
+      finished || t < round.raiseStart
+        ? { phase: finished ? 'done' : 'rest', baton: REST_POSITION, entered: false, sinceEntry: -Infinity }
+        : conductorAt(round, t);
     return { ...base, round: i, totalRounds, finished };
   }
 }

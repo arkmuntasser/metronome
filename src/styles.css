@@ -7,6 +7,8 @@
   --accent: #b5531f;
   --leaf: #5f7d2e;
   --gold: #c99a2e;
+  --frog-ink: #2a1d10;
+  --spot: #fff6dc;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
@@ -19,6 +21,8 @@
     --accent: #e0793f;
     --leaf: #9cbc5c;
     --gold: #e2b84e;
+    --frog-ink: #1a120a;
+    --spot: #5a4326;
     color-scheme: dark;
   }
 }
@@ -42,14 +46,11 @@ h1 { font-size: 1.6rem; margin: 0.2em 0; letter-spacing: 0.02em; }
 .tempo-badge { color: var(--muted); font-size: 1.05rem; }
 
 .stage { display: flex; flex-direction: column; align-items: center; gap: 8px; }
-.baton-view { width: 100%; max-height: 52vh; touch-action: manipulation; }
-.baton-view .guide { fill: none; stroke: var(--line); stroke-width: 1.5; stroke-dasharray: 4 4; }
-.baton-view .ictus circle { fill: var(--muted); }
-.baton-view .ictus text { fill: var(--muted); font-size: 11px; font-family: inherit; }
-.baton-view .stick { stroke: var(--ink); stroke-width: 2.5; stroke-linecap: round; opacity: 0.85; }
-.baton-view .trail { fill: none; stroke: var(--accent); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; opacity: 0.5; }
-.baton-view .tip { fill: var(--accent); }
-.baton-view .flash { fill: var(--gold); transition: opacity 60ms; }
+.frog { width: 100%; max-height: 58vh; touch-action: manipulation; }
+.frog .guide polyline { fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 3 4; opacity: 0.45; }
+.frog .guide text { fill: var(--accent); font-size: 11px; font-family: inherit; opacity: 0.7; }
+.frog .trail { fill: none; stroke: var(--gold); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; opacity: 0.55; }
+.frog .flash { fill: var(--gold); }
 
 .status { text-align: center; min-height: 3.4em; }
 .phase { font-size: clamp(1.4rem, 5vw, 2.2rem); font-style: italic; }

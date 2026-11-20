@@ -16,7 +16,7 @@ import {
 } from './core';
 import { AudioEngine } from './audio/engine';
 import { CLICK_SOUNDS, type ClickSound } from './audio/sounds';
-import { BatonView } from './ui/BatonView';
+import { Frog } from './ui/frog/Frog';
 
 const engine = new AudioEngine();
 
@@ -68,6 +68,7 @@ export default function App() {
   const [drill, setDrill] = useState<DrillSettings>({ enabled: false, rounds: 5, restSeconds: 3 });
   const [sound, setSound] = useState<ClickSound>('woodblock');
   const [volume, setVolume] = useState(0.8);
+  const [showGuide, setShowGuide] = useState(true);
   const [live, setLive] = useState<SessionState | null>(null);
   const running = live !== null && !live.finished;
 
@@ -139,7 +140,7 @@ export default function App() {
       </header>
 
       <main className="stage">
-        <BatonView beatsPerBar={meter.grouping.length} getState={getState} onStateChange={setLive} />
+        <Frog beatsPerBar={meter.grouping.length} showGuide={showGuide} getState={getState} onStateChange={setLive} />
         <div className="status" aria-live="polite">
           <div className={`phase phase-${live?.phase ?? 'rest'}`}>{showEntered}</div>
           <div className="counter">
@@ -292,7 +293,7 @@ export default function App() {
         </fieldset>
 
         <fieldset>
-          <legend>Sound</legend>
+          <legend>Sound &amp; display</legend>
           <label className="check">
             <input type="checkbox" checked={cue.clicks} disabled={running} onChange={(e) => setCue({ ...cue, clicks: e.target.checked })} />
             Click track
@@ -310,6 +311,10 @@ export default function App() {
                 </option>
               ))}
             </select>
+          </label>
+          <label className="check">
+            <input type="checkbox" checked={showGuide} onChange={(e) => setShowGuide(e.target.checked)} />
+            Show the beat pattern
           </label>
           <label>
             Volume
