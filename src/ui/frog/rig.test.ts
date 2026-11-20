@@ -100,4 +100,14 @@ describe('frog rig', () => {
       expect(floatingBaton(REST_POSITION).hand.y).toBeLessThan(364);
     });
   });
+
+  it('downbeat: hat hops and eyes pop on beat 1 only', () => {
+    const base = { phase: 'conducting' as const, baton: { x: 0, y: 0 }, entered: true, sinceEntry: 5, round: 0, totalRounds: 1, finished: false, stopping: false, bar: 1 };
+    const one = poseFor({ ...base, beat: 0, beatProgress: 0 }, 0);
+    const two = poseFor({ ...base, beat: 1, beatProgress: 0 }, 0);
+    expect(one.hat.dy).toBeLessThan(-10);
+    expect(two.hat.dy).toBeCloseTo(0);
+    expect(one.lids).toBe(0);
+    expect(one.pupils.size).toBeGreaterThan(two.pupils.size);
+  });
 });

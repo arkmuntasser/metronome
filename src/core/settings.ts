@@ -35,6 +35,8 @@ export interface PracticeSettings {
   keepAwake: boolean;
   /** The animated frog, or just the baton tip on the beat pattern. */
   view: ConductorView;
+  /** Glow around the screen edges on every downbeat. */
+  downbeatFlash: boolean;
 }
 
 export interface Preset {
@@ -67,6 +69,7 @@ export const DEFAULT_SETTINGS: PracticeSettings = {
   showGuide: true,
   keepAwake: false,
   view: 'frog',
+  downbeatFlash: true,
 };
 
 export function timeSignatureOf(s: PracticeSettings): TimeSignaturePreset {
@@ -160,6 +163,7 @@ export function sanitizeSettings(raw: unknown): PracticeSettings {
     showGuide: bool(r.showGuide, d.showGuide),
     keepAwake: bool(r.keepAwake, d.keepAwake),
     view: oneOf(r.view, CONDUCTOR_VIEWS, d.view),
+    downbeatFlash: bool(r.downbeatFlash, d.downbeatFlash),
   };
 }
 
@@ -206,11 +210,11 @@ export const STARTER_PRESETS: Preset[] = [
 ];
 
 /**
- * Apply a preset. Device / display preferences (which view, keeping the screen awake)
+ * Apply a preset. Device / display preferences (which view, screen pulse, keeping the screen awake)
  * stay as they are: a preset is about what you practise, not how the screen looks.
  */
 export function applyPreset(current: PracticeSettings, preset: PracticeSettings): PracticeSettings {
-  return { ...structuredClone(preset), view: current.view, keepAwake: current.keepAwake };
+  return { ...structuredClone(preset), view: current.view, keepAwake: current.keepAwake, downbeatFlash: current.downbeatFlash };
 }
 
 /** A short human summary, e.g. "3/4 · ♩ = 132 · random 1–5 s · in on 3". */

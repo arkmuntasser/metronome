@@ -13,6 +13,7 @@ import {
 } from './core';
 import { AudioEngine } from './audio/engine';
 import { BatonView } from './ui/BatonView';
+import { DownbeatPulse } from './ui/DownbeatPulse';
 import { Frog } from './ui/frog/Frog';
 import { SettingsSheet } from './ui/SettingsSheet';
 import { TempoControl } from './ui/TempoControl';
@@ -170,6 +171,7 @@ export default function App() {
 
   return (
     <div className="app">
+      <DownbeatPulse getState={getState} enabled={settings.downbeatFlash} />
       <header className="topbar">
         <h1>Maestro Frog</h1>
         <div className="topbar-actions">
