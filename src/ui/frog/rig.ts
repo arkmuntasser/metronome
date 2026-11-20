@@ -8,6 +8,7 @@
  */
 
 import { type Point, type SessionState, REST_POSITION } from '../../core';
+import { downbeatIntensity } from '../downbeat';
 
 export const RIG = {
   viewBox: { x: 0, y: 0, w: 400, h: 460 },
@@ -157,6 +158,8 @@ export interface FrogPose {
   mouth: number;
   /** Ictus flash 0..1 at the baton tip. */
   flash: number;
+  /** Top hat hop on the downbeat: lift (art units, negative = up) and tilt (degrees). */
+  hat: { dy: number; rotate: number };
 }
 
 /**
@@ -226,13 +229,15 @@ export function poseFor(s: SessionState | null, wall: number): FrogPose {
 
   // ── eyes: droopy, dignified lids when relaxed; wide open and locked on you while waiting.
   const blink = phase === 'prep' ? 0 : blinkAmount(wall);
+  // ── downbeat: hat hops, eyes pop wide open (blinks are skipped so the pop is never hidden).
+  const down = downbeatIntensity(s);
   const lidBase = lerp(0.32, 0.08, attention);
-  const lids = Math.max(lidBase, blink);
+  const lids = down > 0 ? lerp(lidBase, 0, down) : Math.max(lidBase, blink);
   const look =
     phase === 'conducting' || phase === 'cutoff'
       ? { dx: clamp((baton.tip.x - 200) / 20, -4, 4), dy: clamp((baton.tip.y - 170) / 30, -2, 3) }
       : { dx: 0, dy: 2 * attention };
-  const pupils = { ...look, size: 1 + 0.25 * attention };
+  const pupils = { ...look, size: 1 + 0.25 * attention + 0.35 * down };
 
   const brows = -2 * attention - 4 * inhale;
   const mouth = Math.max(0.6 * inhale, phase === 'done' ? 0 : 0);
@@ -250,5 +255,6 @@ export function poseFor(s: SessionState | null, wall: number): FrogPose {
     brows,
     mouth,
     flash,
+    hat: { dy: -16 * down, rotate: 6 * down },
   };
 }

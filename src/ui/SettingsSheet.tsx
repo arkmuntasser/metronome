@@ -353,6 +353,12 @@ export function SettingsSheet(p: Props) {
               </button>
             </div>
           </div>
+          <Toggle
+            label="Pulse the screen on beat 1"
+            hint="The screen edges glow on every downbeat, so you can catch it out of the corner of your eye."
+            checked={s.downbeatFlash}
+            onChange={(v) => update((x) => ({ ...x, downbeatFlash: v }))}
+          />
           <Toggle label="Show the beat pattern" hint="Faint guide of the conducting shape." checked={s.showGuide} onChange={(v) => update((x) => ({ ...x, showGuide: v }))} />
           <Toggle
             label="Keep screen awake"

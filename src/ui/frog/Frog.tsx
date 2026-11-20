@@ -80,6 +80,7 @@ export function Frog({ beatsPerBar, showGuide, getState, onStateChange }: Props)
         set(`brow${i}`, 'transform', `translate(0 ${f(pose.brows)})`);
       });
       set('mouthOpen', 'ry', f(9 * pose.mouth));
+      set('hat', 'transform', `translate(0 ${f(pose.hat.dy)}) rotate(${f(pose.hat.rotate)} 200 104)`);
 
       // Baton, held by a floating hand.
       const b = pose.baton;
@@ -187,10 +188,12 @@ export function Frog({ beatsPerBar, showGuide, getState, onStateChange }: Props)
         <ellipse cx="200" cy="192" rx="62" ry="20" fill="#c9cc86" opacity="0.55" />
 
         {/* Top hat, cocked */}
-        <g transform="rotate(-9 200 104)" stroke="var(--frog-ink)" strokeWidth="3">
+<g ref={ref('hat')}>
+                  <g transform="rotate(-9 200 104)" stroke="var(--frog-ink)" strokeWidth="3">
           <rect x="180" y="58" width="40" height="46" rx="4" fill="#2e2622" />
           <rect x="180" y="90" width="40" height="8" fill="#9b2f1f" />
           <ellipse cx="200" cy="104" rx="30" ry="6.5" fill="#2e2622" />
+        </g>
         </g>
 
         {EYES.map((e, i) => (
